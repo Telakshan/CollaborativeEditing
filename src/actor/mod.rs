@@ -1,6 +1,6 @@
-use actix::{ Actor, Addr, AsyncContext, Context, Handler, Message, Running, StreamHandler };
+use actix::{ Actor, Addr, AsyncContext, Handler, Message, Running, StreamHandler };
 use actix_web_actors::ws;
-use crate::ws_session_manager::WsSessionManager;
+use crate::session_manager::WsSessionManager;
 
 //Message structs for WebSocket Events
 
@@ -18,7 +18,7 @@ pub struct Disconnect {
     pub(crate) addr: Addr<WebSocket>
 }
 
-//a message to be brodcast to all connected ws clients
+//a message to be broadcast to all connected ws clients
 //msg = the content that will be sent
 //sender = address of the ws actor that sent the msg
 #[derive(Message, Clone)] //Clone is derived to allow easy duplication of the  messages for easy broadcasting
@@ -34,22 +34,21 @@ pub struct DefaultMessage {
     pub text: String,
 }
 
-impl Handler<Connect> for WebSocket {
+impl Handler<DefaultMessage> for WebSocket {
     type Result = ();
     fn handle(&mut self, msg: DefaultMessage, ctx: &mut Self::Context) {
         ctx.text(msg.text);
     }
 }
 
-impl Handler<BroadCastMessage> for WebSocket {
+impl Handler<BroadcastMessage> for WebSocket {
     type Result = ();
-    fn handle(&mut self, msg: DefaultMessage, ctx: &mut Self::Context) {
-        ctx.text(msg.text);
+    fn handle(&mut self, msg: BroadcastMessage, ctx: &mut Self::Context) {
+        ctx.text(msg.msg);
     }
 }
 
 pub struct WebSocket {
-
     pub(crate) manager: Addr<WsSessionManager>,
 }
 
@@ -62,7 +61,7 @@ impl Actor for WebSocket {
         });
     }
 
-    fn stopping(&mut self, _: &mut Self::Context) -> Running {
+    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
         self.manager.do_send(Disconnect {
             addr: ctx.address()
         });

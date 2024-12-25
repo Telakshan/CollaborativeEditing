@@ -1,6 +1,6 @@
 use std::collections::HashSet;
-use actix::{Actor, AsyncContext, Context, Handler, };
-use crate::ws_actor::{ Connect, Disconnect, WebSocket, BroadcastMessage };
+use actix::{Actor, Addr, Context, Handler};
+use crate::actor::{ Connect, Disconnect, WebSocket, BroadcastMessage };
 
 pub struct WsSessionManager {
     //A set to track the addresses of connected websocket actors
@@ -24,7 +24,7 @@ impl WsSessionManager {
 }
 
 impl Actor for WsSessionManager {
-    type Context = ws::WebsocketContext<Self>; //standard context type for Actix actors
+    type Context = Context<Self>; //standard context type for Actix actors
 }
 
 impl Handler<Connect> for WsSessionManager {
@@ -41,7 +41,7 @@ impl Handler<Connect> for WsSessionManager {
 impl Handler<Disconnect> for WsSessionManager {
     type Result = ();
 
-    fn handler(&mut self, msg: Disconnect, _: &mut Self::Context) {
+    fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) {
         println!("Client Disconnected!");
 
         self.sessions.remove(&msg.addr);
@@ -50,5 +50,17 @@ impl Handler<Disconnect> for WsSessionManager {
 
 impl Handler<BroadcastMessage> for WsSessionManager {
     type Result = ();
+
+    fn handle(&mut self, msg: BroadcastMessage, _: &mut Self::Context) {
+        self.last_text = msg.msg.clone();
+
+        for addr in self.sessions.iter() {
+            if *addr != msg.sender {
+                let msg_clone = msg.clone();
+
+                addr.do_send(msg_clone);
+            }
+        }
+    }
 
 }

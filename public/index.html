@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Collaborative Document Editing System - Rust</title>
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
 
 
 </head>
@@ -25,15 +27,78 @@
         let last_delta = {}
 
         // create WebSocket instance/connection
-
+        var ws = new WebSocket("ws://127.0.0.1:8000/ws/");
 
         // Handle WebSocket events
 
+        ws.onopen  = function (event) {
+            console.log("Connection opened");
+        }
+
+/*        ws.onmessage = function (event) {
+            console.log("Message from server", event.data);
+            document.getElementById('editor').innerHTML = event.data;
+        }*/
+
+        ws.onclose = function (event) {
+            console.log("Connection closed");
+        }
+
+        const toolBarOptions = [
+            ['bold', 'italic', 'underline']
+        ]
 
         // Create QuillJS instance
-
+        const quill = new Quill('#editor', {
+            modules: {
+                // Equivalent to { toolbar: { container: '#toolbar' }}
+                toolbar: toolBarOptions
+            },
+            theme: 'snow'
+        });
 
         // Set handling functions for the text-change event (QuillJS)
+        quill.on('text-change', (delta, oldDelta, source) => {
+            last_update = Date.now();
+            last_delta = delta;
+
+            let obj = {
+                time: last_update,
+                delta: delta
+            }
+
+            if(source === 'user'){
+                console.log(JSON.stringify(obj));
+                ws.send(JSON.stringify(obj));
+            }
+        });
+
+        ws.onmessage = function (event) {
+            try {
+                console.log("Message from server: ", event.data);
+
+                let obj = JSON.parse(event.data);
+
+                let time = obj.time;
+                let delta = obj.delta;
+
+                if(last_update < time) {
+                    // server update is newer, apply directly
+                    quill.updateContents(delta);
+                } else if(last_update > time){
+                    console.warn("Received outdated server update!");
+                }
+
+                //ensure local time is in sync or ahead
+                last_update = Math.max(last_update, time);
+
+            } catch (error) {
+                console.error("Error handling message: ", error);
+                //notify the user about the change conflicts
+                //close ws and reopen it
+            }
+        }
+
     </script>
 
 </body>
